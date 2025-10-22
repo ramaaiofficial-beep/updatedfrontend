@@ -25,9 +25,10 @@ interface Message {
     address?: string;
     notes?: string;
   };
+  isTyping?: boolean;
 }
 
-import { API_ENDPOINTS } from "@/config/api";
+const API_URL = "http://localhost:8000";
 
 export const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,6 +38,35 @@ export const ChatInterface = () => {
   const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Typing effect for AI responses
+  const typeMessage = (messageId: string, fullText: string) => {
+    let currentText = "";
+    let index = 0;
+    
+    const typeInterval = setInterval(() => {
+      if (index < fullText.length) {
+        currentText += fullText[index];
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === messageId 
+              ? { ...msg, content: currentText, isTyping: true }
+              : msg
+          )
+        );
+        index++;
+      } else {
+        clearInterval(typeInterval);
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === messageId 
+              ? { ...msg, isTyping: false }
+              : msg
+          )
+        );
+      }
+    }, 30); // Adjust speed as needed
+  };
 
   // Scroll chat to bottom on new messages
   const scrollToBottom = () => {
@@ -59,7 +89,7 @@ export const ChatInterface = () => {
         {
           id: "welcome",
           content:
-            "✨ Hello! I'm RAMA AI, your intelligent assistant. How can I help you today?",
+            "Hey there! I'm Rama, your friendly AI companion. What's on your mind today?",
           role: "assistant",
           timestamp: new Date(),
         },
@@ -78,7 +108,7 @@ export const ChatInterface = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${API_ENDPOINTS.CHAT}`, {
+      const res = await fetch(`${API_URL}/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: messageToSend }),
@@ -88,19 +118,25 @@ export const ChatInterface = () => {
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.reply || "I couldn't find an answer.",
+        content: "", // Start with empty content for typing effect
         profile: data.profile || undefined,
         role: "assistant",
         timestamp: new Date(),
+        isTyping: true,
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+      
+      // Start typing effect
+      setTimeout(() => {
+        typeMessage(aiMessage.id, data.reply || "I couldn't find an answer.");
+      }, 500); // Small delay before typing starts
     } catch (error) {
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 2).toString(),
-          content: "⚠️ Error: Failed to connect to backend.",
+          content: "Oops, looks like I'm having trouble connecting right now. Try again in a moment?",
           role: "assistant",
           timestamp: new Date(),
         },
@@ -221,6 +257,9 @@ export const ChatInterface = () => {
                   )}
                 >
                   {message.content}
+                  {message.isTyping && (
+                    <span className="inline-block w-2 h-4 bg-purple-400 ml-1 animate-pulse" />
+                  )}
 
                   {/* Profile details if present */}
                   {message.profile && (
